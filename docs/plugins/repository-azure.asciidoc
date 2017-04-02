@@ -179,27 +179,11 @@ Example using Java:
 [source,java]
 ----
 client.admin().cluster().preparePutRepository("my_backup_java1")
-    .setType("azure").setSettings(Settings.settingsBuilder()
+    .setType("azure").setSettings(Settings.builder()
         .put(Storage.CONTAINER, "backup-container")
         .put(Storage.CHUNK_SIZE, new ByteSizeValue(32, ByteSizeUnit.MB))
     ).get();
 ----
-
-[[repository-azure-global-settings]]
-===== Global repositories settings
-
-All those repository settings can also be defined globally in `elasticsearch.yml` file using prefix
-`repositories.azure.`. For example:
-
-[source,yaml]
-----
-repositories.azure:
-    container: backup-container
-    base_path: backups
-    chunk_size: 32m
-    compress": true
-----
-
 
 [[repository-azure-validation]]
 ===== Repository validation rules

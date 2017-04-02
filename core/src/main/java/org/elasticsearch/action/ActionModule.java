@@ -149,6 +149,9 @@ import org.elasticsearch.action.delete.DeleteAction;
 import org.elasticsearch.action.delete.TransportDeleteAction;
 import org.elasticsearch.action.explain.ExplainAction;
 import org.elasticsearch.action.explain.TransportExplainAction;
+import org.elasticsearch.action.fieldcaps.FieldCapabilitiesAction;
+import org.elasticsearch.action.fieldcaps.TransportFieldCapabilitiesAction;
+import org.elasticsearch.action.fieldcaps.TransportFieldCapabilitiesIndexAction;
 import org.elasticsearch.action.fieldstats.FieldStatsAction;
 import org.elasticsearch.action.fieldstats.TransportFieldStatsAction;
 import org.elasticsearch.action.get.GetAction;
@@ -205,6 +208,7 @@ import org.elasticsearch.plugins.ActionPlugin;
 import org.elasticsearch.plugins.ActionPlugin.ActionHandler;
 import org.elasticsearch.rest.RestController;
 import org.elasticsearch.rest.RestHandler;
+import org.elasticsearch.rest.action.RestFieldCapabilitiesAction;
 import org.elasticsearch.rest.action.RestFieldStatsAction;
 import org.elasticsearch.rest.action.RestMainAction;
 import org.elasticsearch.rest.action.admin.cluster.RestCancelTasksAction;
@@ -248,11 +252,9 @@ import org.elasticsearch.rest.action.admin.indices.RestGetIndexTemplateAction;
 import org.elasticsearch.rest.action.admin.indices.RestGetIndicesAction;
 import org.elasticsearch.rest.action.admin.indices.RestGetMappingAction;
 import org.elasticsearch.rest.action.admin.indices.RestGetSettingsAction;
-import org.elasticsearch.rest.action.admin.indices.RestHeadIndexTemplateAction;
 import org.elasticsearch.rest.action.admin.indices.RestIndexDeleteAliasesAction;
 import org.elasticsearch.rest.action.admin.indices.RestIndexPutAliasAction;
 import org.elasticsearch.rest.action.admin.indices.RestIndicesAliasesAction;
-import org.elasticsearch.rest.action.admin.indices.RestIndicesExistsAction;
 import org.elasticsearch.rest.action.admin.indices.RestIndicesSegmentsAction;
 import org.elasticsearch.rest.action.admin.indices.RestIndicesShardStoresAction;
 import org.elasticsearch.rest.action.admin.indices.RestIndicesStatsAction;
@@ -290,7 +292,6 @@ import org.elasticsearch.rest.action.document.RestBulkAction;
 import org.elasticsearch.rest.action.document.RestDeleteAction;
 import org.elasticsearch.rest.action.document.RestGetAction;
 import org.elasticsearch.rest.action.document.RestGetSourceAction;
-import org.elasticsearch.rest.action.document.RestHeadAction;
 import org.elasticsearch.rest.action.document.RestIndexAction;
 import org.elasticsearch.rest.action.document.RestMultiGetAction;
 import org.elasticsearch.rest.action.document.RestMultiTermVectorsAction;
@@ -482,6 +483,8 @@ public class ActionModule extends AbstractModule {
         actions.register(DeleteStoredScriptAction.INSTANCE, TransportDeleteStoredScriptAction.class);
 
         actions.register(FieldStatsAction.INSTANCE, TransportFieldStatsAction.class);
+        actions.register(FieldCapabilitiesAction.INSTANCE, TransportFieldCapabilitiesAction.class,
+            TransportFieldCapabilitiesIndexAction.class);
 
         actions.register(PutPipelineAction.INSTANCE, PutPipelineTransportAction.class);
         actions.register(GetPipelineAction.INSTANCE, GetPipelineTransportAction.class);
@@ -527,7 +530,6 @@ public class ActionModule extends AbstractModule {
         registerHandler.accept(new RestDeleteSnapshotAction(settings, restController));
         registerHandler.accept(new RestSnapshotsStatusAction(settings, restController));
 
-        registerHandler.accept(new RestIndicesExistsAction(settings, restController));
         registerHandler.accept(new RestTypesExistsAction(settings, restController));
         registerHandler.accept(new RestGetIndicesAction(settings, restController, indexScopedSettings, settingsFilter));
         registerHandler.accept(new RestIndicesStatsAction(settings, restController));
@@ -551,7 +553,6 @@ public class ActionModule extends AbstractModule {
         registerHandler.accept(new RestGetIndexTemplateAction(settings, restController));
         registerHandler.accept(new RestPutIndexTemplateAction(settings, restController));
         registerHandler.accept(new RestDeleteIndexTemplateAction(settings, restController));
-        registerHandler.accept(new RestHeadIndexTemplateAction(settings, restController));
 
         registerHandler.accept(new RestPutMappingAction(settings, restController));
         registerHandler.accept(new RestGetMappingAction(settings, restController));
@@ -567,8 +568,6 @@ public class ActionModule extends AbstractModule {
         registerHandler.accept(new RestIndexAction(settings, restController));
         registerHandler.accept(new RestGetAction(settings, restController));
         registerHandler.accept(new RestGetSourceAction(settings, restController));
-        registerHandler.accept(new RestHeadAction.Document(settings, restController));
-        registerHandler.accept(new RestHeadAction.Source(settings, restController));
         registerHandler.accept(new RestMultiGetAction(settings, restController));
         registerHandler.accept(new RestDeleteAction(settings, restController));
         registerHandler.accept(new org.elasticsearch.rest.action.document.RestCountAction(settings, restController));
@@ -594,6 +593,7 @@ public class ActionModule extends AbstractModule {
         registerHandler.accept(new RestDeleteStoredScriptAction(settings, restController));
 
         registerHandler.accept(new RestFieldStatsAction(settings, restController));
+        registerHandler.accept(new RestFieldCapabilitiesAction(settings, restController));
 
         // Tasks API
         registerHandler.accept(new RestListTasksAction(settings, restController, nodesInCluster));
