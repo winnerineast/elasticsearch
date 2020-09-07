@@ -26,12 +26,11 @@ import java.nio.CharBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 import static java.util.Collections.singletonMap;
-import static org.hamcrest.Matchers.containsString;
 
 public class RegexTests extends ScriptTestCase {
+
     @Override
     protected Settings scriptEngineSettings() {
         // Enable regexes just for this test. They are disabled by default.
@@ -155,7 +154,7 @@ public class RegexTests extends ScriptTestCase {
     }
 
     public void testSplitAsStream() {
-        assertEquals(new HashSet<>(Arrays.asList("cat", "dog")), exec("/,/.splitAsStream('cat,dog').collect(Collectors.toSet())"));
+        assertEquals(new HashSet<String>(Arrays.asList("cat", "dog")), exec("/,/.splitAsStream('cat,dog').collect(Collectors.toSet())"));
     }
 
     // Make sure the flags are set
@@ -254,25 +253,26 @@ public class RegexTests extends ScriptTestCase {
         IllegalArgumentException e = expectScriptThrows(IllegalArgumentException.class, () -> {
             exec("Pattern.compile('aa')");
         });
-        assertEquals("Unknown call [compile] with [1] arguments on type [Pattern].", e.getMessage());
+        assertTrue(e.getMessage().contains("[java.util.regex.Pattern, compile/1]"));
     }
 
     public void testBadRegexPattern() {
         ScriptException e = expectThrows(ScriptException.class, () -> {
             exec("/\\ujjjj/"); // Invalid unicode
         });
-        assertEquals("Error compiling regex: Illegal Unicode escape sequence", e.getCause().getMessage());
+        assertEquals("invalid regular expression: could not compile regex constant [\\ujjjj] with flags []", e.getCause().getMessage());
 
         // And make sure the location of the error points to the offset inside the pattern
-        assertEquals("/\\ujjjj/", e.getScriptStack().get(0));
-        assertEquals("   ^---- HERE", e.getScriptStack().get(1));
+        assertScriptStack(e,
+                "/\\ujjjj/",
+                "   ^---- HERE");
     }
 
     public void testRegexAgainstNumber() {
         ClassCastException e = expectScriptThrows(ClassCastException.class, () -> {
             exec("12 ==~ /cat/");
         });
-        assertEquals("Cannot cast from [int] to [String].", e.getMessage());
+        assertEquals("Cannot cast from [int] to [java.lang.String].", e.getMessage());
     }
 
     public void testBogusRegexFlag() {
