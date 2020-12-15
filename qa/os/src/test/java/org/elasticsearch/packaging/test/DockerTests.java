@@ -36,8 +36,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static java.nio.file.attribute.PosixFilePermissions.fromString;
 import static org.elasticsearch.packaging.util.Docker.chownWithPrivilegeEscalation;
@@ -54,6 +56,7 @@ import static org.elasticsearch.packaging.util.Docker.runContainer;
 import static org.elasticsearch.packaging.util.Docker.runContainerExpectingFailure;
 import static org.elasticsearch.packaging.util.Docker.verifyContainerInstallation;
 import static org.elasticsearch.packaging.util.Docker.waitForElasticsearch;
+import static org.elasticsearch.packaging.util.DockerRun.builder;
 import static org.elasticsearch.packaging.util.FileMatcher.p600;
 import static org.elasticsearch.packaging.util.FileMatcher.p644;
 import static org.elasticsearch.packaging.util.FileMatcher.p660;
@@ -67,8 +70,10 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 
@@ -175,7 +180,7 @@ public class DockerTests extends PackagingTestCase {
 
         // Restart the container
         final Map<Path, Path> volumes = Map.of(tempDir, Path.of("/usr/share/elasticsearch/config"));
-        runContainer(distribution(), volumes, Map.of("ES_JAVA_OPTS", "-XX:-UseCompressedOops"));
+        runContainer(distribution(), builder().volumes(volumes).envVars(Map.of("ES_JAVA_OPTS", "-XX:-UseCompressedOops")));
 
         waitForElasticsearch(installation);
 
@@ -203,7 +208,7 @@ public class DockerTests extends PackagingTestCase {
             // Restart the container
             final Map<Path, Path> volumes = Map.of(tempEsDataDir.toAbsolutePath(), installation.data);
 
-            runContainer(distribution(), volumes, null);
+            runContainer(distribution(), builder().volumes(volumes));
 
             waitForElasticsearch(installation);
 
@@ -223,6 +228,9 @@ public class DockerTests extends PackagingTestCase {
 
     /**
      * Check that it is possible to run Elasticsearch under a different user and group to the default.
+     * Note that while the default configuration files are world-readable, when we execute Elasticsearch
+     * it will attempt to create a keystore under the `config` directory. This will fail unless
+     * we also bind-mount the config dir.
      */
     public void test072RunEsAsDifferentUserAndGroup() throws Exception {
         assumeFalse(Platforms.WINDOWS);
@@ -251,7 +259,18 @@ public class DockerTests extends PackagingTestCase {
         volumes.put(tempEsLogsDir.toAbsolutePath(), installation.logs);
 
         // Restart the container
-        runContainer(distribution(), volumes, null, 501, 501);
+        runContainer(distribution(), builder().volumes(volumes).uid(501, 501));
+
+        waitForElasticsearch(installation);
+    }
+
+    /**
+     * Check that it is possible to run Elasticsearch under a different user and group to the default,
+     * without bind-mounting any directories, provided the container user is added to the `root` group.
+     */
+    public void test073RunEsAsDifferentUserAndGroupWithoutBindMounting() throws Exception {
+        // Restart the container
+        runContainer(distribution(), builder().uid(501, 501).extraArgs("--group-add 0"));
 
         waitForElasticsearch(installation);
     }
@@ -286,7 +305,7 @@ public class DockerTests extends PackagingTestCase {
         final Map<Path, Path> volumes = Map.of(tempDir, Path.of("/run/secrets"));
 
         // Restart the container
-        runContainer(distribution(), volumes, envVars);
+        runContainer(distribution(), builder().volumes(volumes).envVars(envVars));
 
         // If we configured security correctly, then this call will only work if we specify the correct credentials.
         try {
@@ -342,7 +361,7 @@ public class DockerTests extends PackagingTestCase {
 
         // Restart the container - this will check that Elasticsearch started correctly,
         // and didn't fail to follow the symlink and check the file permissions
-        runContainer(distribution(), volumes, envVars);
+        runContainer(distribution(), builder().volumes(volumes).envVars(envVars));
     }
 
     /**
@@ -363,7 +382,7 @@ public class DockerTests extends PackagingTestCase {
 
         final Map<Path, Path> volumes = Map.of(tempDir, Path.of("/run/secrets"));
 
-        final Result dockerLogs = runContainerExpectingFailure(distribution, volumes, envVars);
+        final Result dockerLogs = runContainerExpectingFailure(distribution, builder().volumes(volumes).envVars(envVars));
 
         assertThat(
             dockerLogs.stderr,
@@ -388,7 +407,7 @@ public class DockerTests extends PackagingTestCase {
         final Map<Path, Path> volumes = Map.of(tempDir, Path.of("/run/secrets"));
 
         // Restart the container
-        final Result dockerLogs = runContainerExpectingFailure(distribution(), volumes, envVars);
+        final Result dockerLogs = runContainerExpectingFailure(distribution(), builder().volumes(volumes).envVars(envVars));
 
         assertThat(
             dockerLogs.stderr,
@@ -433,7 +452,7 @@ public class DockerTests extends PackagingTestCase {
         final Map<Path, Path> volumes = Map.of(tempDir, Path.of("/run/secrets"));
 
         // Restart the container
-        final Result dockerLogs = runContainerExpectingFailure(distribution(), volumes, envVars);
+        final Result dockerLogs = runContainerExpectingFailure(distribution(), builder().volumes(volumes).envVars(envVars));
 
         assertThat(
             dockerLogs.stderr,
@@ -456,7 +475,7 @@ public class DockerTests extends PackagingTestCase {
         // tool in question is only in the default distribution.
         assumeTrue(distribution.isDefault());
 
-        runContainer(distribution(), null, Map.of("http.host", "this.is.not.valid"));
+        runContainer(distribution(), builder().envVars(Map.of("http.host", "this.is.not.valid")));
 
         // This will fail if the env var above is passed as a -E argument
         final Result result = sh.runIgnoreExitCode("elasticsearch-setup-passwords auto");
@@ -622,6 +641,49 @@ public class DockerTests extends PackagingTestCase {
 
         assertThat("Container logs should contain full class names", containerLogs.stdout, containsString("org.elasticsearch.node.Node"));
         assertThat("Container logs don't contain INFO level messages", containerLogs.stdout, containsString("INFO"));
+    }
+
+    /**
+     * Check that it is possible to write logs to disk
+     */
+    public void test121CanUseStackLoggingConfig() throws Exception {
+        runContainer(distribution(), builder().envVars(Map.of("ES_LOG_STYLE", "file")));
+
+        waitForElasticsearch(installation);
+
+        final Result containerLogs = getContainerLogs();
+        final List<String> stdout = containerLogs.stdout.lines().collect(Collectors.toList());
+
+        assertThat(
+            "Container logs should be formatted using the stack config",
+            stdout.get(stdout.size() - 1),
+            matchesPattern("^\\[\\d\\d\\d\\d-.*")
+        );
+        assertThat("[logs/docker-cluster.log] should exist but it doesn't", existsInContainer("logs/docker-cluster.log"), is(true));
+    }
+
+    /**
+     * Check that the default logging config can be explicitly selected.
+     */
+    public void test122CanUseDockerLoggingConfig() throws Exception {
+        runContainer(distribution(), builder().envVars(Map.of("ES_LOG_STYLE", "console")));
+
+        waitForElasticsearch(installation);
+
+        final Result containerLogs = getContainerLogs();
+        final List<String> stdout = containerLogs.stdout.lines().collect(Collectors.toList());
+
+        assertThat("Container logs should be formatted using the docker config", stdout.get(stdout.size() - 1), startsWith("{\""));
+        assertThat("[logs/docker-cluster.log] shouldn't exist but it does", existsInContainer("logs/docker-cluster.log"), is(false));
+    }
+
+    /**
+     * Check that an unknown logging config is rejected
+     */
+    public void test123CannotUseUnknownLoggingConfig() {
+        final Result result = runContainerExpectingFailure(distribution(), builder().envVars(Map.of("ES_LOG_STYLE", "unknown")));
+
+        assertThat(result.stderr, containsString("ERROR: ES_LOG_STYLE set to [unknown]. Expected [console] or [file]"));
     }
 
     /**

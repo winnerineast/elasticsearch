@@ -82,7 +82,7 @@ public class RateAggregationBuilder extends ValuesSourceAggregationBuilder.LeafO
         } else {
             rateUnit = null;
         }
-        if (in.getVersion().onOrAfter(Version.V_8_0_0)) {
+        if (in.getVersion().onOrAfter(Version.V_7_11_0)) {
             if (in.readBoolean()) {
                 rateMode = in.readEnum(RateMode.class);
             }
@@ -101,7 +101,7 @@ public class RateAggregationBuilder extends ValuesSourceAggregationBuilder.LeafO
         } else {
             out.writeByte((byte) 0);
         }
-        if (out.getVersion().onOrAfter(Version.V_8_0_0)) {
+        if (out.getVersion().onOrAfter(Version.V_7_11_0)) {
             if (rateMode != null) {
                 out.writeBoolean(true);
                 out.writeEnum(rateMode);
@@ -118,17 +118,20 @@ public class RateAggregationBuilder extends ValuesSourceAggregationBuilder.LeafO
 
     @Override
     protected RateAggregatorFactory innerBuild(
-        AggregationContext context,
-        ValuesSourceConfig config,
-        AggregatorFactory parent,
-        AggregatorFactories.Builder subFactoriesBuilder
-    ) throws IOException {
+            AggregationContext context,
+            ValuesSourceConfig config,
+            AggregatorFactory parent,
+            AggregatorFactories.Builder subFactoriesBuilder) throws IOException {
         if (field() == null && script() == null) {
             if (rateMode != null) {
                 throw new IllegalArgumentException("The mode parameter is only supported with field or script");
             }
         }
-        return new RateAggregatorFactory(name, config, rateUnit, rateMode, context, parent, subFactoriesBuilder, metadata);
+
+        RateAggregatorSupplier aggregatorSupplier =
+            context.getValuesSourceRegistry().getAggregator(REGISTRY_KEY, config);
+        return new RateAggregatorFactory(name, config, rateUnit, rateMode, context, parent,
+                                         subFactoriesBuilder, metadata, aggregatorSupplier);
     }
 
     @Override
